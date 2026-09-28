@@ -12,7 +12,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageOps
 from pillow_heif import register_heif_opener
 
 
@@ -33,10 +33,10 @@ def load_photo(path: Path, max_side: int = 3000) -> np.ndarray:
 
 
 class Matcher:
-    def __init__(self) -> None:
+    def __init__(self, detection_threshold: float = 0.6) -> None:
         if not DETECTOR.is_file() or not RECOGNIZER.is_file():
             raise RuntimeError("Missing OpenCV models; see README.md")
-        self.detector = cv2.FaceDetectorYN.create(str(DETECTOR), "", (320, 320), 0.6, 0.3, 5000)
+        self.detector = cv2.FaceDetectorYN.create(str(DETECTOR), "", (320, 320), detection_threshold, 0.3, 5000)
         self.recognizer = cv2.FaceRecognizerSF.create(str(RECOGNIZER), "")
 
     def faces(self, image: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -131,8 +131,6 @@ def scan(args: argparse.Namespace, matcher: Matcher) -> int:
             for similarity, face in scored:
                 x, y, w, h = face[:4]
                 sx, sy = thumb.width / image.shape[1], thumb.height / image.shape[0]
-                cv2.rectangle(image, (int(x), int(y)), (int(x+w), int(y+h)), (0, 255, 0), 2)
-                from PIL import ImageDraw
                 ImageDraw.Draw(thumb).rectangle((x*sx, y*sy, (x+w)*sx, (y+h)*sy),
                                                 outline="#188038" if similarity >= args.threshold else "#d18b00", width=3)
             thumb_name = f"{number:05d}.jpg"
@@ -153,8 +151,9 @@ def scan(args: argparse.Namespace, matcher: Matcher) -> int:
         title = html.escape(Path(row["path"]).name)
         thumbnail = html.escape(row["thumbnail"])
         link = Path(row["path"]).resolve().as_uri()
+        preview = f"<img src='{thumbnail}' alt='Preview of {title}'>" if thumbnail else ""
         cards.append(f"<article class='{row['status'].replace(' ', '-')}'><a href='{html.escape(link)}'>"
-                     f"<img src='{thumbnail}' alt='Preview of {title}'><b>{title}</b></a>"
+                     f"{preview}<b>{title}</b></a>"
                      f"<small>{html.escape(row['status'])} · score {row['score'] or '—'} · {row['faces']} faces</small></article>")
     counts = {status: sum(row["status"] == status for row in rows) for status in ["match", "review", "unlikely", "no face", "error"]}
     style = "body{font:16px system-ui;margin:30px;background:#f5f4ef;color:#17211b}header{position:sticky;top:0;background:#f5f4ef;padding:8px}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}article{background:white;padding:12px;border-radius:8px}article.match{border:3px solid #188038}article.review{border:3px solid #d18b00}img{width:100%;height:220px;object-fit:contain;background:#eee}b,small{display:block;overflow-wrap:anywhere}small{margin-top:6px}"
@@ -185,6 +184,8 @@ def main() -> int:
         parser.error(f"No such folder: {args.input}")
     if args.command == "scan" and not args.gallery.is_file() and not args.references.is_dir():
         parser.error("No gallery.npz or reference_faces folder; run enroll_photos.py first")
+    if args.command == "scan" and not (0 <= args.review_threshold <= args.threshold <= 1):
+        parser.error("thresholds must satisfy 0 <= review-threshold <= threshold <= 1")
     matcher = Matcher()
     return inspect_references(args, matcher) if args.command == "inspect" else scan(args, matcher)
 

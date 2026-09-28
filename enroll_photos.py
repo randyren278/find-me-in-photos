@@ -66,7 +66,7 @@ def main() -> int:
     if args.limit:
         records = records[:args.limit]
     print(f"Photos person {args.person!r} ({person_id}): {len(records)} tagged photo faces", flush=True)
-    matcher = Matcher()
+    matcher = Matcher(detection_threshold=0.4)
     vectors, sources, failures = [], [], []
     source_counts = {"original": 0, "preview": 0, "thumbnail": 0}
     for number, row in enumerate(records, 1):
