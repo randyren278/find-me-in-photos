@@ -1,28 +1,82 @@
-# Find me in photos
+<p align="center">
+  <img src="docs/assets/hero.jpg" width="100%" alt="Pixel-art darkroom with one race photo illuminated among a wall of contact sheets">
+</p>
 
-This local tool finds photos likely to contain Randy. It detects every face in each image, compares each face with the Apple Photos **Randy R** face tags, and writes an HTML review page and CSV. It never uploads photos or face data.
+<h1 align="center">Find me in photos</h1>
 
-## Set up
+<p align="center"><strong>Find your face in a folder full of everyone else's photos.</strong></p>
 
-Requires macOS, `uv`, and access to the local Photos library. From this directory:
+<p align="center">Use a person you've already identified in Apple Photos to search a race album, event dump, or any local photo folder. Review the suggestions in your browser. Your photos and face data stay on your Mac.</p>
+
+<p align="center">
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#get-started">Get started</a> ·
+  <a href="#read-the-results">Results</a> ·
+  <a href="#privacy-and-limits">Privacy & limits</a>
+</p>
+
+---
+
+## The whole team's photos. Just yours, please.
+
+Someone shares a folder with hundreds of event photos. You're in a few of them, but finding those few means opening every file. Find me in photos uses an existing **Person** in your macOS Photos library as a reference, checks the faces in a folder, and builds a local review page with the likely hits at the top.
+
+In the first 50-photo race folder, the owner confirmed all three photos flagged as strong matches. The tool still asks you to review its suggestions: face similarity is evidence, not identity proof.
+
+## How it works
+
+```text
+Apple Photos person tags  →  local face gallery
+                                      ↓
+Photo folder  →  detect faces  →  compare faces  →  HTML review page + CSV/JSON
+```
+
+1. **Enroll once.** Read the photos already tagged with your name in Apple Photos and build a local gallery of face embeddings.
+2. **Point it at a folder.** Scan supported images recursively, including group photos, without moving or changing the originals.
+3. **Review the candidates.** Open the generated page, check the highlighted face in each photo, and use the CSV or JSON if you want to sort or script further.
+
+Face detection uses [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet); face comparison uses [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface). Both run locally through OpenCV.
+
+## Get started
+
+You need **macOS**, a local **Photos** library with a named Person, and [uv](https://docs.astral.sh/uv/getting-started/installation/). Setup creates a Python 3.13 environment and downloads checksum-verified model files.
 
 ```sh
+git clone https://github.com/randyren278/find-me-in-photos.git
+cd find-me-in-photos
 ./setup.sh
-.venv/bin/python enroll_photos.py
+.venv/bin/python enroll_photos.py --person "Your name in Photos"
+./find-me "/path/to/photo folder" --output "/path/to/results"
 ```
 
-Enrollment reads the Photos database and existing local originals or previews. It does not change the Photos library. The private `gallery.npz` file contains face embeddings; keep it private. `gallery.json` records how many tagged faces were usable and why any were skipped. Re-run enrollment after Photos has added new Randy pictures.
+Open `/path/to/results/index.html` in a browser. You can omit `--output` to write into this repo's ignored `results/` folder. Re-run enrollment when you add more tagged photos to the Person.
 
-## Scan a folder
+If your library is elsewhere, pass `--library "/path/to/Photos Library.photoslibrary"` to `enroll_photos.py`. Enrollment reports how many tagged faces it could use in the private `gallery.json` file.
 
-```sh
-./find-me /path/to/photos --output /path/to/results
-```
+### No usable Photos Person?
 
-Open `index.html` in the output folder. Green photos are suggested matches, orange photos need review, and the CSV includes every file scanned. Scores are similarities, **not probabilities**. A face hidden by sunglasses, turned away, or very small can be missed; group photos can receive a high score for another person. Check the results before sharing or deleting anything. Originals are never moved or changed.
+Run `.venv/bin/python find_me.py inspect "/path/to/reference photos"` to make a face contact sheet. Place at least two **single-face crops of yourself** in `reference_faces/`, then run `./find-me` as above. The scanner uses these references when `gallery.npz` does not exist.
 
-Supported inputs: JPEG, PNG, WebP, BMP, TIFF, and HEIC/HEIF. Folders are scanned recursively. Videos are not scanned. You can adjust `--threshold` (default `0.58`) and `--review-threshold` (default `0.45`).
+## Read the results
 
-The gallery is made from Photos' internal database and preview files, whose layout may change with macOS updates. If the Photos layout changes, use `find_me.py inspect /path/to/reference-photos` to make a face contact sheet and place at least two **single-face crops of Randy** in `reference_faces/`; scanning uses those when `gallery.npz` is absent.
+The output directory contains `index.html`, `results.csv`, `results.json`, and small preview images. Every scanned file appears in the data exports.
 
-Face detection and matching use [OpenCV Zoo YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) and [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface). Model checksums are verified by `setup.sh`.
+| Label | What it means |
+| --- | --- |
+| **Match** · green | Similarity at or above `0.58`; inspect the highlighted face. |
+| **Review** · orange | Similarity from `0.45` to below `0.58`; check manually. |
+| **Unlikely** | A face was found, but its best score was lower. |
+| **No face / error** | Detection found no face, or the file could not be processed. |
+
+Scores are **similarities, not probabilities**. Tune the cutoffs with `--threshold` and `--review-threshold` if needed. JPEG, PNG, WebP, BMP, TIFF, HEIC, and HEIF are supported; videos are not scanned.
+
+## Privacy and limits
+
+- **Local processing.** Enrollment reads the Photos library; scanning reads the folder you name. Neither operation uploads photos or face embeddings. Setup downloads dependencies and model files.
+- **Private outputs.** The default gallery, reference, model, and result paths are ignored by Git. Keep your face gallery and exported results private when sharing the repo; use an output folder outside the repo if you prefer.
+- **Human review required.** Small, turned, obscured, or poorly lit faces can be missed. Similar-looking people can be flagged. Check the photo before using or sharing a result.
+- **Photos integration is macOS-specific.** Enrollment reads Apple's internal Photos database and local originals or previews. A macOS update or unavailable iCloud original may affect which tagged faces can be enrolled. The manual reference path above remains available.
+
+---
+
+<p align="center">Made for the moment when everyone shares the photos and you just want yours.</p>
